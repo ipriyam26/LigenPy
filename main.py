@@ -3,55 +3,15 @@ from distutils import extension
 from pprint import pprint
 import shutil
 from time import sleep
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 from requests import request
 import requests
 from bs4 import BeautifulSoup
 from tqdm.auto import tqdm
 import enum
 
-class Filter(enum.Enum):
-    year = 'Year'
-    pages = 'Page'
-    author = 'Author'
-    size = 'Size'
-    extension = 'Type'
-    publisher = 'Publisher'
-    language = 'Language'
-    
-    
-    
+from helper import Book, Helper,Source,Filter
 
-@dataclass
-class Source:
-    cloudflare: str
-    ipfs_io: str
-    infura: str
-    pinata:str
-
-
-@dataclass
-class Book:
-    Title: str
-    Author: str
-    Id: str
-    Publisher: str
-    Year: int
-    Pages: str
-    Language: str
-    Size: str
-    Type: str
-    Mirrors: List[str]
-    image: str
-    description: str
-    source: Source
-    
-    def download(self):
-        with requests.get(self.source.cloudflare,stream=True) as response:
-            total_length = int(response.headers.get('Content-Length'))
-            with tqdm.wrapattr(response.raw,"read",total=total_length,desc="") as raw:
-                with open(f"{self.Title}.{self.Type}", "wb") as f:    
-                    shutil.copyfileobj(raw, f)
 
 
 
@@ -73,6 +33,7 @@ class Libgen:
             'lg_topic': 'libgen',
         }
         self.books = []
+        self.helper = Helper()
 
 
     def author_search(self, author:str) -> List[Book]:
@@ -136,62 +97,55 @@ class Libgen:
         sleep(5)
         self.title_search(search)
         
-    def _parse_mirrors(self, link: str) -> Dict[str,str|Source]:
-        headers = {
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
-            'Accept-Language': 'en-IN,en-GB;q=0.9,en;q=0.8,en-US;q=0.7',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'DNT': '1',
-            'Pragma': 'no-cache',
-            'Referer': 'http://libgen.rs/',
-            'Upgrade-Insecure-Requests': '1',
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5060.114 Safari/537.36 Edg/103.0.1264.51',
+
+        
+    def filter(self,filters:List[Dict[Filter,List[Any]|str|int]])->List[Book]:
+        """
+        You can filter the books by multiple filters. You can import the filters enum from the helper.py file.
+        
+        For year,pages,size you can specify a range by sending a tuple of two numbers.
+        
+        
+        Example:
+        
+        year_fil = {
+            Filter.year: (2000,2020),
         }
-
-        response = requests.get(link, headers=headers, verify=False)
-        soup = BeautifulSoup(response.text, "html.parser")
-        image= f'http://library.lol{soup.find("img").get("src")}'
-        try:
-            des = soup.select("p+ div")[0].text
-            des = des.replace("Description:", "")
-        except Exception:
-            des = ""
-        temps = soup.select("li a")
-        links = [temp.get("href") for temp in temps]
-        source = Source(
-            cloudflare=links[0] or '',
-            ipfs_io=links[1] or '',
-            infura=links[2] or '',
-            pinata=links[3] or '',
-        )
-
-        return {
-            'image': image,
-            'description': des,
-            'source': source,
+        
+        For other filters you can send a single value or a list of values.
+        
+    
+        Author_fil={
+            Filter.Author:['author name','author name2']    
         }
-
         
         
-        
-
-
-    def filter(self,filter: Filter, arg: Tuple|List):
-        """Filter out books based on the filter and argument
+        year_fil={
+            Filter.year:[2020,2021]
+            }
 
         Args:
-            filter (Filter): _description_
-            arg (Tuple | List): _description_
+            filters (List[Dict[Filter,List[Any]]]): List of filters to filter the books by.
         """
+        
+        for filter in filters:
+            key,value = list(filter.items())[0]
+            self.inner_filter(
+                filter=key,
+                arg=value
+            )
+        return self.books
+    
+
+    def inner_filter(self,filter: Filter, arg: Tuple|List):
         if type(arg) in (str,int,float):
             self.books = [book for book in self.books if getattr(book, filter.value) == arg]
         elif len(arg) == 1:
             self.books = [book for book in self.books if getattr(book, filter.value) == arg[0]]
-        elif len(arg) == 2:
-            if filter in [Filter.author,Filter.extension,Filter.publisher,Filter.language]:
-                self.books = [book for book in self.books if getattr(book,filter.value) in arg]
-            elif filter in [Filter.year,Filter.pages,Filter.size]:
+        elif len(arg) == 2 and type(arg) == tuple:
+            # if filter in [Filter.author,Filter.extension,Filter.publisher,Filter.language]:
+            #     self.books = [book for book in self.books if getattr(book,filter.value) in arg]
+            if filter in [Filter.year,Filter.pages,Filter.size]:
                 self.books = [book for book in self.books if getattr(book,filter.value) <= arg[0] and getattr(book,filter.value) >= arg[1]]
         else:
             self.books = [book for book in self.books if getattr(book,filter.value) in arg]
@@ -212,17 +166,17 @@ class Libgen:
             for mirror_temp in mirrors_temp:
                 a = mirror_temp.find("a")
                 mirrors.append(a.get("href"))
-            temp = self._parse_mirrors(mirrors[0])
+            temp = self.helper._parse_mirrors(mirrors[0])
             books.append(
                 Book(
                     row.find_all("td")[2].text,
                     row.find_all("td")[1].text,
                     row.find_all("td")[0].text,
                     row.find_all("td")[3].text,
-                    int(row.find_all("td")[4].text) if row.find_all("td")[4].text else 0,
-                    row.find_all("td")[5].text,
+                    self.helper._refactor_year(row.find_all("td")[4].text),
+                    self.helper._refactor_pages(row.find_all("td")[5].text),
                     row.find_all("td")[6].text,
-                    row.find_all("td")[7].text,
+                    self.helper._refactor_size(row.find_all("td")[7].text),
                     row.find_all("td")[8].text,
                     mirrors,
                     temp.get("image"),
@@ -234,8 +188,9 @@ class Libgen:
         return books
 
 
+
 if __name__ == "__main__":
     lib = Libgen()
-    books = lib.title_search("ikigai")
+    books = lib.title_search("Atomic Habits")
     pprint(books)
-    books[0].download()
+    # books[1].download()
