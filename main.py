@@ -1,12 +1,33 @@
 from dataclasses import dataclass
+from distutils import extension
 from pprint import pprint
 import shutil
 from time import sleep
-from typing import Dict, List
+from typing import Dict, List, Tuple
 from requests import request
 import requests
 from bs4 import BeautifulSoup
 from tqdm.auto import tqdm
+import enum
+
+class Filter(enum.Enum):
+    year = 'Year'
+    pages = 'Page'
+    author = 'Author'
+    size = 'Size'
+    extension = 'Type'
+    publisher = 'Publisher'
+    language = 'Language'
+    
+    
+    
+
+@dataclass
+class Source:
+    cloudflare: str
+    ipfs_io: str
+    infura: str
+    pinata:str
 
 
 @dataclass
@@ -23,10 +44,10 @@ class Book:
     Mirrors: List[str]
     image: str
     description: str
-    download_link: List[str]
+    source: Source
     
     def download(self):
-        with requests.get(self.download_link[0],stream=True) as response:
+        with requests.get(self.source.cloudflare,stream=True) as response:
             total_length = int(response.headers.get('Content-Length'))
             with tqdm.wrapattr(response.raw,"read",total=total_length,desc="") as raw:
                 with open(f"{self.Title}.{self.Type}", "wb") as f:    
@@ -51,6 +72,7 @@ class Libgen:
         self.cookies = {
             'lg_topic': 'libgen',
         }
+        self.books = []
 
 
     def author_search(self, author:str) -> List[Book]:
@@ -90,7 +112,7 @@ class Libgen:
     
     
 
-    def search(self, search:str) -> List[Book]:
+    def title_search(self, search:str) -> List[Book]:
         params = (
             ("req", search),
             ("open", "0"),
@@ -112,9 +134,9 @@ class Libgen:
             return self._parse_data(response.text)
         print("Request failed with status code: {}".format(response.status_code))
         sleep(5)
-        self.search(search)
+        self.title_search(search)
         
-    def _parse_mirrors(self, link: str) -> Dict[str,str]:
+    def _parse_mirrors(self, link: str) -> Dict[str,str|Source]:
         headers = {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
             'Accept-Language': 'en-IN,en-GB;q=0.9,en;q=0.8,en-US;q=0.7',
@@ -137,10 +159,17 @@ class Libgen:
             des = ""
         temps = soup.select("li a")
         links = [temp.get("href") for temp in temps]
+        source = Source(
+            cloudflare=links[0] or '',
+            ipfs_io=links[1] or '',
+            infura=links[2] or '',
+            pinata=links[3] or '',
+        )
+
         return {
             'image': image,
             'description': des,
-            'download': links,
+            'source': source,
         }
 
         
@@ -148,7 +177,27 @@ class Libgen:
         
 
 
-        
+    def filter(self,filter: Filter, arg: Tuple|List):
+        """Filter out books based on the filter and argument
+
+        Args:
+            filter (Filter): _description_
+            arg (Tuple | List): _description_
+        """
+        if type(arg) in (str,int,float):
+            self.books = [book for book in self.books if getattr(book, filter.value) == arg]
+        elif len(arg) == 1:
+            self.books = [book for book in self.books if getattr(book, filter.value) == arg[0]]
+        elif len(arg) == 2:
+            if filter in [Filter.author,Filter.extension,Filter.publisher,Filter.language]:
+                self.books = [book for book in self.books if getattr(book,filter.value) in arg]
+            elif filter in [Filter.year,Filter.pages,Filter.size]:
+                self.books = [book for book in self.books if getattr(book,filter.value) <= arg[0] and getattr(book,filter.value) >= arg[1]]
+        else:
+            self.books = [book for book in self.books if getattr(book,filter.value) in arg]
+
+     
+            
         
 
     def _parse_data(self, data) -> List[Book]:
@@ -178,14 +227,15 @@ class Libgen:
                     mirrors,
                     temp.get("image"),
                     temp.get("description"),
-                    temp.get("download"),
+                    temp.get("source"),
                 )
             )
+        self.books = books
         return books
 
 
 if __name__ == "__main__":
     lib = Libgen()
-    books = lib.search("ikigai")
+    books = lib.title_search("ikigai")
     pprint(books)
     books[0].download()
