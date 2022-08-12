@@ -1,0 +1,9 @@
+setup.py
+LibgenPy/__init__.py
+LibgenPy/helper.py
+LibgenPy/libgen.py
+LibgenPy.egg-info/PKG-INFO
+LibgenPy.egg-info/SOURCES.txt
+LibgenPy.egg-info/dependency_links.txt
+LibgenPy.egg-info/requires.txt
+LibgenPy.egg-info/top_level.txt

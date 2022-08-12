@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 from tqdm import tqdm
 
-VERSION = '0.0.1' 
+VERSION = '0.0.2' 
 DESCRIPTION = 'Package for searching books in Libgen'
 LONG_DESCRIPTION = """ 
 Package for searching books in Libgen 

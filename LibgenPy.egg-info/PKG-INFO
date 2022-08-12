@@ -1,0 +1,48 @@
+Metadata-Version: 2.1
+Name: LibgenPy
+Version: 0.0.2
+Summary: Package for searching books in Libgen
+Author: Priyam Srivastava
+Author-email: ipriyam26@gmail.com
+Keywords: python,library-genesis,libgen,book,search,download
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Education
+Classifier: Programming Language :: Python :: 3
+Classifier: Operating System :: MacOS :: MacOS X
+Classifier: Operating System :: Microsoft :: Windows
+
+ 
+Package for searching books in Libgen 
+You can search by 
+> Title
+> Author
+> ISBN
+You can filter the books by multiple filters. 
+You can import the Filter enum from the helper.py file.
+You can Filter using
+> Year
+> Pages
+> Size
+> Extension
+> Publisher
+> Language
+> Author
+
+For year,pages,size you can specify a range by sending a tuple of two numbers.
+
+
+Example:
+
+year_fil = {
+    Filter.year: (2000,2020),
+}
+
+For other filters you can send a single value or a list of values.
+
+
+Author_year_fil={
+    Filter.Author:['author name','author name2']    ,
+    Filter.year:[2020,2021]
+
+}
+
